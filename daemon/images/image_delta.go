@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"time"
 
@@ -64,8 +65,13 @@ func (i *ImageService) DeltaCreate(deltaSrc, deltaDest string, options types.Ima
 	progressReader := progress.NewProgressReader(srcData, progressOutput, srcDataLen, deltaSrc, "Fingerprinting")
 	defer progressReader.Close()
 
+	// librsync recommends setting block length to the square root of the old
+	// file size. We follow this advice but we round the value to a power of two
+	// because librsync-go is optimized for power of two block lengths. This
+	// gives us small delta sizes and fast execution times.
+	blockLen := roundToPowerOf2(uint32(math.Sqrt(float64(srcDataLen))))
 	sigStart := time.Now()
-	srcSig, err := librsync.Signature(bufio.NewReaderSize(progressReader, 65536), ioutil.Discard, 512, 32, librsync.BLAKE2_SIG_MAGIC)
+	srcSig, err := librsync.Signature(bufio.NewReaderSize(progressReader, 65536), ioutil.Discard, blockLen, 32, librsync.BLAKE2_SIG_MAGIC)
 	if err != nil {
 		return err
 	}
@@ -284,4 +290,22 @@ func (lock *imglock) unlock(ls layer.Store) {
 	for _, l := range lock.layers {
 		layer.ReleaseAndLog(ls, l)
 	}
+}
+
+// roundToPowerOf2 rounds x to the next power of 2 value. If x is greater than
+// 2^31, returns 2^31 (=2147483648) -- which is technically incorrect but is the
+// largest power of two value we can represent on an uint32.
+//
+// The algorithm is adapted from Hacker's Delight, 2nd Edition, p.62.
+func roundToPowerOf2(x uint32) uint32 {
+	if x >= 2147483648 {
+		return 2147483648
+	}
+	x -= 1
+	x |= x >> 1
+	x |= x >> 2
+	x |= x >> 4
+	x |= x >> 8
+	x |= x >> 16
+	return x + 1
 }
