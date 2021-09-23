@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/containerd/containerd/cmd/containerd"
 	containerdShim "github.com/containerd/containerd/cmd/containerd-shim"
 	"github.com/containerd/containerd/cmd/ctr"
@@ -26,8 +27,18 @@ func main() {
 	case "balena", "balena-engine":
 		docker.Main()
 	case "balenad", "balena-engine-daemon":
+		fmt.Printf("Process %v/%v is balenad\n", os.Getpid(), os.Getppid())
+		policy, prio := schedArgsFromEnv("DAEMON", SCHED_RR, 50)
+		if policy >= 0 {
+			setScheduler(policy, prio)
+		}
 		dockerd.Main()
 	case "balena-containerd", "balena-engine-containerd":
+		fmt.Printf("Process %v/%v is balena-containerd\n", os.Getpid(), os.Getppid())
+		policy, prio := schedArgsFromEnv("CONTAINERD", SCHED_RR, 50)
+		if policy >= 0 {
+			setScheduler(policy|SCHED_RESET_ON_FORK, prio)
+		}
 		containerd.Main()
 	case "balena-containerd-shim", "balena-engine-containerd-shim":
 		containerdShim.Main()
@@ -38,7 +49,7 @@ func main() {
 	case "balena-proxy", "balena-engine-proxy":
 		proxy.Main()
 	default:
-		fmt.Fprintf(os.Stderr, "error: unkown command: %v\n", command)
+		fmt.Fprintf(os.Stderr, "error: unknown command: %v\n", command)
 		os.Exit(1)
 	}
 }
