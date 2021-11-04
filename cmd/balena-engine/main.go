@@ -37,7 +37,7 @@ func main() {
 		fmt.Printf("Process %v/%v is balena-containerd\n", os.Getpid(), os.Getppid())
 		policy, prio := schedArgsFromEnv("CONTAINERD", SCHED_RR, 50)
 		if policy >= 0 {
-			setScheduler(policy|SCHED_RESET_ON_FORK, prio)
+			setScheduler(policy /*|SCHED_RESET_ON_FORK*/, prio)
 		}
 		containerd.Main()
 	case "balena-containerd-shim", "balena-engine-containerd-shim":

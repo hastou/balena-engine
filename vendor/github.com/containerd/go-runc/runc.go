@@ -220,6 +220,13 @@ func (r *Runc) Exec(context context.Context, id string, spec specs.Process, opts
 		return err
 	}
 	args := []string{"exec", "--process", f.Name()}
+
+	// LMB: Warning, hack ahead!
+	fmt.Printf("---> Runc.exec with spec.Args = %v\n", spec.Args)
+	if spec.Args[0] == "node" || spec.Args[0] == "hello" || spec.Args[0] == "/hello" { // ...IS HEALTHCHECK OR SUPERVISOR...
+		args = append(args, "--keep-rt-scheduling")
+	}
+
 	if opts != nil {
 		oargs, err := opts.args()
 		if err != nil {

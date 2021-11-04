@@ -1,12 +1,29 @@
+//go:build linux
 // +build linux
 
 package runc
 
 import (
+	"fmt"
 	"os"
+	"unsafe"
 
 	"github.com/urfave/cli"
+	"golang.org/x/sys/unix"
 )
+
+///////////////////////////////////////
+
+// Scheduling policies.
+const (
+	SCHED_NORMAL        = 0
+	SCHED_FIFO          = 1
+	SCHED_RR            = 2
+	SCHED_BATCH         = 3
+	SCHED_RESET_ON_FORK = 0x40000000 // Meant to be ORed with the others
+)
+
+///////////////////////////////////////
 
 // default action is to start a container
 var runCommand = cli.Command{
@@ -61,10 +78,26 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			Name:  "preserve-fds",
 			Usage: "Pass N additional file descriptors to the container (stdio + $LISTEN_FDS + N in total)",
 		},
+		cli.BoolFlag{
+			Name:  "keep-rt-scheduling",
+			Usage: "keep the runc process running with a realtime scheduling policy",
+		},
 	},
 	Action: func(context *cli.Context) error {
 		if err := checkArgs(context, 1, exactArgs); err != nil {
 			return err
+		}
+		if !context.Bool("keep-rt-scheduling") {
+			type sched_param struct {
+				sched_priority int
+			}
+			s := &sched_param{0}
+			p := unsafe.Pointer(s)
+			_, _, errno := unix.Syscall(unix.SYS_SCHED_SETSCHEDULER, 0, SCHED_NORMAL, uintptr(p))
+			if errno != 0 {
+				fmt.Fprintf(os.Stderr, "Syscall SYS_SCHED_SETSCHEDULER failed: %v\n", errno)
+				// TODO: Return an error or keep running anyway?
+			}
 		}
 		if err := revisePidFile(context); err != nil {
 			return err
